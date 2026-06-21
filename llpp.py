@@ -12,7 +12,7 @@ from PyPDF2 import PdfReader
 from docx import Document
 
 # ========== CONFIGURAZIONE ==========
-MODEL_NAME = "llama-3.1-70b-versatile" # Modello eccellente per l'italiano e il diritto
+MODEL_NAME = "llama-3.3-70b-versatile" # Modello eccellente per l'italiano e il diritto
 MAX_CHARS = 120000  
 
 SYSTEM_PROMPT_TEMPLATE = """Sei 'RUP-Digitale', un assistente esperto in Lavori Pubblici italiani.
