@@ -1,6 +1,5 @@
 """
-LLPP Digital Colleague - Versione Finale Enterprise (Leggi + Regole Interne + Modelli)
-Sviluppato per generare atti amministrativi allineati a leggi, direttive interne e modelli pregressi.
+LLPP Digital Colleague - Versione Finale Enterprise
 """
 
 import os
@@ -22,27 +21,26 @@ REGOLA FONDAMENTALE SULLE NORMATIVE STATALI:
 Sei vincolato ESCLUSIVAMENTE al D.Lgs. 36/2023 e suoi decreti attuativi. È VIETATO citare o applicare il D.Lgs. 50/2016.
 
 REGOLE INTERNE, DIRETTIVE E LINEE GUIDA DELL'ENTE (PRIORITÀ ASSOLUTA):
-Se tra i documenti caricati sono presenti file contenenti regole operative, manuali interni, checklist di fase, o direttive specifiche dell'Ente/Regione (es. file chiamati 'regola', 'manuale', 'linee guida', 'direttiva', 'procedura'), tu DEVI considerare queste regole come VINCOLANTI.
-Le procedure interne dell'Ente sovrascrivono le prassi generiche. Se una regola interna impone passaggi aggiuntivi, formule specifiche o workflow particolari, devi seguirli alla lettera e citare che lo stai facendo in base a tale direttiva.
+Se tra i documenti caricati sono presenti file contenenti regole operative, manuali interni, checklist di fase, o direttive specifiche dell'Ente/Regione, tu DEVI considerare queste regole come VINCOLANTI.
+Le procedure interne dell'Ente sovrascrivono le prassi generiche. Devi seguirle alla lettera e citare che lo stai facendo in base a tale direttiva.
 
 STILE E MODELLI DI RIFERIMENTO (FEW-SHOT):
-Se tra i documenti caricati ci sono vecchie Determine, Delibere o Atti amministrativi (es. file con 'esempio', 'modello', o vecchi atti simili a quello richiesto), tu DEVI:
-1. Analizzarne lo schema esatto (intestazione, 'Premesso', 'Ritenuto', 'Determina di', formule finali).
-2. Clonare ESATTAMENTE quello schema e quel tono burocratico per il nuovo atto.
-3. Sostituire nei modelli solo i dati vecchi con i dati nuovi reperiti negli altri documenti di progetto caricati.
+Se tra i documenti caricati ci sono vecchie Determine, Delibere o Atti amministrativi, tu DEVI:
+1. Clonare ESATTAMENTE quello schema e quel tono burocratico per il nuovo atto.
+2. Sostituire nei modelli solo i dati vecchi con i dati nuovi reperiti negli altri documenti.
 
-CONTESTO ATTUALE (Tutti i file caricati: Norme, Regole Interne, Modelli Determine, Documenti di Progetto):
+CONTESTO ATTUALE (Tutti i file caricati):
 {DOCUMENTI_LETTI}
 
 IL TUO COMPITO:
-1. ANALISI DI FASE: Identifica lo stato dell'arte secondo l'Art. 23 D.Lgs 36/2023 e le eventuali regole interne caricate.
-2. GAP ANALYSIS: Cosa c'è e cosa manca, verificando obbligatoriamente le checklist/regole interne se presenti.
-3. GENERAZIONE BOZZA: Redigi il documento richiesto clonando gli esempi presenti, inserendo i dati di progetto, e rispettando ESTREMAMENTE le regole interne e le direttive caricate.
-4. NORMATIVE: Cita Art. e Comma del D.Lgs. 36/2023 e, se applicabile, la direttiva/regola interna utilizzata.
+1. ANALISI DI FASE: Identifica lo stato dell'arte secondo l'Art. 23 D.Lgs 36/2023.
+2. GAP ANALYSIS: Cosa c'è e cosa manca.
+3. GENERAZIONE BOZZA: Redigi il documento richiesto clonando gli esempi e rispettando le regole interne.
+4. NORMATIVE: Cita Art. e Comma del D.Lgs. 36/2023.
 
 REGOLE GENERALI:
-- Linguaggio burocratico-amministrativo formale. Niente chiacchiere.
-- Se mancano dati fondamentali, inserisci un placeholder chiaro tipo [INSERIRE DATO]."""
+- Linguaggio burocratico. Niente chiacchiere.
+- Se mancano dati, inserisci un placeholder [INSERIRE DATO]."""
 
 # ========== PARSING DOCUMENTI ==========
 def extract_text_from_pdf(file_bytes) -> str:
@@ -69,7 +67,7 @@ def smart_truncate(text: str) -> str:
     if len(text) <= MAX_CHARS:
         return text
     half = MAX_CHARS // 2
-    return text[:half] + "\n\n[... CONTENUTO TRONCATO PER SUPERAMENTO LIMITE ...]\n\n" + text[-half:]
+    return text[:half] + "\n\n[... CONTENUTO TRONCATO ...]\n\n" + text[-half:]
 
 def process_uploaded_files(uploaded_files):
     documents_info = []
@@ -89,12 +87,11 @@ def process_uploaded_files(uploaded_files):
 
     return documents_info, smart_truncate("\n".join(full_parts))
 
-# ========== INTELLIGENZA ARTIFICIALE (GEMINI) ==========
+# ========== INTELLIGENZA ARTIFICIALE (GEMINI REST) ==========
 def ask_rup_digitale(user_message: str, system_prompt: str, history: list) -> str:
     api_key = st.secrets["GOOGLE_API_KEY"]
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent?key={api_key}"
     
-    # Formattazione della cronologia per l'API REST di Google
     contents = []
     for h in history:
         role = "user" if h["role"] == "user" else "model"
@@ -109,13 +106,17 @@ def ask_rup_digitale(user_message: str, system_prompt: str, history: list) -> st
 
     try:
         response = requests.post(url, json=payload)
-        response.raise_for_status() # Controlla errori HTTP
+        response.raise_for_status()
         return response.json()["candidates"][0]["content"]["parts"][0]["text"]
     except requests.exceptions.HTTPError as e:
         error_msg = e.response.json().get('error', {}).get('message', str(e))
-        return f"[Errore API Google: {error_msg}. Verifica che l'API Gemini sia abilitata nel tuo progetto Google Cloud.]"
+        return f"[Errore API Google: {error_msg}]"
     except Exception as e:
         return f"[Errore generico: {e}]"
+
+def looks_like_draft(text: str) -> bool:
+    keywords = ["bozza", "oggetto:", "il sottoscritto", "determina", "premesso", "ritenuto", "art. ", "d.lgs"]
+    return any(k in text.lower() for k in keywords)
 
 # ========== INTERFACCIA UTENTE STREAMLIT ==========
 st.set_page_config(page_title="LLPP Assistant Pro", page_icon="⚖️", layout="wide")
@@ -135,17 +136,13 @@ with st.sidebar:
     st.markdown("---")
     with st.expander("💡 Come caricare i file (Best Practice)"):
         st.markdown("""
-        L'IA capisce il ruolo del file dal suo nome. Nominali in modo esplicito:
-        
-        - **Per le regole interne:** `REGOLA_Manualistica_Interna_Affidamenti.docx` oppure `DIRETTIVA_Dirigente_Fase_Esecutiva.pdf`
-        - **Per i modelli da clonare:** `ESEMPIO_Determina_Affidamento_2023.docx`
-        - **Per la normativa:** `NORMA_Dlgs_36_2023.pdf`
-        - **Per il progetto:** `Relazione_Tecnica_Ponte_Rossi.pdf`
-        
-        *Nota: I PDF devono essere testuali, non scansioni fotografiche.*
+        Nomina i file in modo esplicito:
+        - **Regole interne:** `REGOLA_Manualistica_Affidamenti.docx`
+        - **Modelli da clonare:** `ESEMPIO_Determina_2023.docx`
+        - **Normativa:** `NORMA_Dlgs_36_2023.pdf`
+        - **Progetto:** `Relazione_Tecnica.pdf`
         """)
 
-# Stato della sessione
 if "messages" not in st.session_state: st.session_state.messages = []
 if "context" not in st.session_state: st.session_state.context = ""
 if "documents" not in st.session_state: st.session_state.documents = []
@@ -155,14 +152,14 @@ if analyze_btn:
     if not uploaded_files:
         st.error("Carica almeno un file nel riquadro sopra.")
     else:
-        with st.spinner("Estrazione testo e allineamento contesto giuridico/regolamentare..."):
+        with st.spinner("Estrazione testo e allineamento contesto..."):
             docs, ctx = process_uploaded_files(uploaded_files)
             st.session_state.documents = docs
             st.session_state.context = ctx
             st.session_state.system_prompt = SYSTEM_PROMPT_TEMPLATE.replace("{DOCUMENTI_LETTI}", ctx)
             st.session_state.messages = [] 
             
-        st.success(f"Contesto aggiornato: {len(ctx):,} caratteri. L'IA ha 'letto' e ponderato {len(docs)} documenti.")
+        st.success(f"Contesto aggiornato: {len(ctx):,} caratteri. Documenti letti: {len(docs)}.")
 
 st.title("🏗️ Agente di Supporto all'Iter LLPP")
 
@@ -175,30 +172,28 @@ with st.expander(f"📄 Documenti nel Contesto Attuale ({len(st.session_state.do
             st.text(d["preview"])
             st.markdown("---")
 
-# Mostra cronologia chat
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
         if msg["role"] == "assistant" and msg.get("has_draft", False):
             st.download_button(label="📥 Scarica Bozza (.md)", data=msg["content"], file_name=f"bozza_{msg['id']}.md", mime="text/markdown", key=f"dl_{msg['id']}")
 
-# Input chat
-user_input = st.chat_input("Es: 'Scrivi la determina seguendo le REGOLE INTERNE caricate e usando l'ESEMPIO come stampino'...")
+user_input = st.chat_input("Es: Scrivi la determina seguendo le REGOLE e usando l'ESEMPIO...")
 if user_input:
     if not st.session_state.context.strip():
-        st.warning("Attenzione: nessun contesto caricato. Usa la sidebar a sinistra per caricare i documenti prima di fare domande.")
+        st.warning("Carica i documenti nella sidebar prima di procedere.")
     else:
         st.session_state.messages.append({"role": "user", "content": user_input, "id": len(st.session_state.messages)})
         with st.chat_message("user"): 
             st.markdown(user_input)
 
         with st.chat_message("assistant"):
-            with st.spinner("RUP-Digitale sta redigendo nel rispetto delle regole interne..."):
+            with st.spinner("RUP-Digitale sta redigendo..."):
                 reply = ask_rup_digitale(user_input, st.session_state.system_prompt, st.session_state.messages[:-1])
             st.markdown(reply)
             
             has_draft = looks_like_draft(reply)
             if has_draft:
-                st.download_button(label="📥 Scarica Bozza Ufficiale (.md)", data=reply, file_name=f"bozza_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md", mime="text/markdown", key=f"dl_new_{len(st.session_state.messages)}")
+                st.download_button(label="📥 Scarica Bozza (.md)", data=reply, file_name=f"bozza_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md", mime="text/markdown", key=f"dl_new_{len(st.session_state.messages)}")
 
         st.session_state.messages.append({"role": "assistant", "content": reply, "has_draft": has_draft, "id": len(st.session_state.messages)})
