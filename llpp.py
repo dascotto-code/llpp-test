@@ -8,7 +8,7 @@ from io import BytesIO
 from datetime import datetime
 
 import streamlit as st
-import google.generativeai as genai
+import requests
 from PyPDF2 import PdfReader
 from docx import Document
 
@@ -91,31 +91,31 @@ def process_uploaded_files(uploaded_files):
 
 # ========== INTELLIGENZA ARTIFICIALE (GEMINI) ==========
 def ask_rup_digitale(user_message: str, system_prompt: str, history: list) -> str:
-    genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+    api_key = st.secrets["GOOGLE_API_KEY"]
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
     
-    generation_config = {"temperature": 0.1, "top_p": 0.95} # Temp bassissima per massima aderenza
-    
-    model = genai.GenerativeModel(
-        model_name=MODEL_NAME,
-        system_instruction=system_prompt,
-        generation_config=generation_config
-    )
-
-    chat_history = []
+    # Formattazione della cronologia per l'API REST di Google
+    contents = []
     for h in history:
         role = "user" if h["role"] == "user" else "model"
-        chat_history.append({"role": role, "parts": [h["content"]]})
+        contents.append({"role": role, "parts": [{"text": h["content"]}]})
+    contents.append({"role": "user", "parts": [{"text": user_message}]})
+
+    payload = {
+        "system_instruction": {"parts": [{"text": system_prompt}]},
+        "contents": contents,
+        "generationConfig": {"temperature": 0.1, "topP": 0.95}
+    }
 
     try:
-        chat = model.start_chat(history=chat_history)
-        response = chat.send_message(user_message)
-        return response.text
+        response = requests.post(url, json=payload)
+        response.raise_for_status() # Controlla errori HTTP
+        return response.json()["candidates"][0]["content"]["parts"][0]["text"]
+    except requests.exceptions.HTTPError as e:
+        error_msg = e.response.json().get('error', {}).get('message', str(e))
+        return f"[Errore API Google: {error_msg}. Verifica che l'API Gemini sia abilitata nel tuo progetto Google Cloud.]"
     except Exception as e:
-        return f"[Errore comunicazione con Gemini: {e}]"
-
-def looks_like_draft(text: str) -> bool:
-    keywords = ["bozza", "oggetto:", "il sottoscritto", "determina", "premesso", "ritenuto", "art. ", "d.lgs"]
-    return any(k in text.lower() for k in keywords)
+        return f"[Errore generico: {e}]"
 
 # ========== INTERFACCIA UTENTE STREAMLIT ==========
 st.set_page_config(page_title="LLPP Assistant Pro", page_icon="⚖️", layout="wide")
