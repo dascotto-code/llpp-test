@@ -168,7 +168,7 @@ st.title("🏗️ Agente di Supporto all'Iter LLPP")
 
 with st.expander(f"📄 Documenti nel Contesto Attuale ({len(st.session_state.documents)})", expanded=False):
     if not st.session_state.documents:
-        str.info("Nessun documento caricato.")
+        st.info("Nessun documento caricato.")
     else:
         for d in st.session_state.documents:
             st.markdown(f"**{d['name']}**")
