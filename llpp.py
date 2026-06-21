@@ -1,5 +1,5 @@
 """
-LLPP Digital Colleague - Versione Finale Enterprise
+LLPP Digital Colleague - Versione Definitiva (Motore Groq - Zero problemi di chiave)
 """
 
 import os
@@ -7,13 +7,13 @@ from io import BytesIO
 from datetime import datetime
 
 import streamlit as st
-import requests
+from groq import Groq
 from PyPDF2 import PdfReader
 from docx import Document
 
 # ========== CONFIGURAZIONE ==========
-MODEL_NAME = "gemini-1.5-flash"
-MAX_CHARS = 500000  
+MODEL_NAME = "llama-3.1-70b-versatile" # Modello eccellente per l'italiano e il diritto
+MAX_CHARS = 120000  
 
 SYSTEM_PROMPT_TEMPLATE = """Sei 'RUP-Digitale', un assistente esperto in Lavori Pubblici italiani.
 
@@ -87,32 +87,24 @@ def process_uploaded_files(uploaded_files):
 
     return documents_info, smart_truncate("\n".join(full_parts))
 
-# ========== INTELLIGENZA ARTIFICIALE (GEMINI REST) ==========
+# ========== INTELLIGENZA ARTIFICIALE (GROQ) ==========
 def ask_rup_digitale(user_message: str, system_prompt: str, history: list) -> str:
-    api_key = st.secrets["GOOGLE_API_KEY"]
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent?key={api_key}"
+    client = Groq(api_key=st.secrets["GROQ_API_KEY"]) # Nota: GROQ_API_KEY
     
-    contents = []
+    messages = [{"role": "system", "content": system_prompt}]
     for h in history:
-        role = "user" if h["role"] == "user" else "model"
-        contents.append({"role": role, "parts": [{"text": h["content"]}]})
-    contents.append({"role": "user", "parts": [{"text": user_message}]})
-
-    payload = {
-        "system_instruction": {"parts": [{"text": system_prompt}]},
-        "contents": contents,
-        "generationConfig": {"temperature": 0.1, "topP": 0.95}
-    }
+        messages.append({"role": h["role"], "content": h["content"]})
+    messages.append({"role": "user", "content": user_message})
 
     try:
-        response = requests.post(url, json=payload)
-        response.raise_for_status()
-        return response.json()["candidates"][0]["content"]["parts"][0]["text"]
-    except requests.exceptions.HTTPError as e:
-        error_msg = e.response.json().get('error', {}).get('message', str(e))
-        return f"[Errore API Google: {error_msg}]"
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.1,
+        )
+        return response.choices[0].message.content
     except Exception as e:
-        return f"[Errore generico: {e}]"
+        return f"[Errore comunicazione con Groq: {e}]"
 
 def looks_like_draft(text: str) -> bool:
     keywords = ["bozza", "oggetto:", "il sottoscritto", "determina", "premesso", "ritenuto", "art. ", "d.lgs"]
@@ -123,7 +115,7 @@ st.set_page_config(page_title="LLPP Assistant Pro", page_icon="⚖️", layout="
 
 with st.sidebar:
     st.title("⚖️ LLPP Assistant Pro")
-    st.caption("Motore: Gemini 1.5 | Riferimento: D.Lgs. 36/2023 + Regole Ente")
+    st.caption("Motore: Llama 3.1 70B su Groq | Riferimento: D.Lgs. 36/2023")
     st.markdown("---")
     
     uploaded_files = st.file_uploader(
@@ -134,11 +126,11 @@ with st.sidebar:
     analyze_btn = st.button("🧠 Analizza e Carica nel Contesto", use_container_width=True)
     
     st.markdown("---")
-    with st.expander("💡 Come caricare i file (Best Practice)"):
+    with st.expander("💡 Come caricare i file"):
         st.markdown("""
         Nomina i file in modo esplicito:
-        - **Regole interne:** `REGOLA_Manualistica_Affidamenti.docx`
-        - **Modelli da clonare:** `ESEMPIO_Determina_2023.docx`
+        - **Regole interne:** `REGOLA_Manualistica.docx`
+        - **Modelli da clonare:** `ESEMPIO_Determina.docx`
         - **Normativa:** `NORMA_Dlgs_36_2023.pdf`
         - **Progetto:** `Relazione_Tecnica.pdf`
         """)
@@ -150,7 +142,7 @@ if "system_prompt" not in st.session_state: st.session_state.system_prompt = SYS
 
 if analyze_btn:
     if not uploaded_files:
-        st.error("Carica almeno un file nel riquadro sopra.")
+        st.error("Carica almeno un file.")
     else:
         with st.spinner("Estrazione testo e allineamento contesto..."):
             docs, ctx = process_uploaded_files(uploaded_files)
